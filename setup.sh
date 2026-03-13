@@ -268,8 +268,43 @@ fi
 
 if [[ -n "${PIP_CMD}" ]]; then
     info "Installing Pillow, requests, pandas..."
-    $PIP_CMD install --quiet --upgrade Pillow requests pandas
-    success "Python dependencies installed"
+
+    # Try normal install first
+    if ${PIP_CMD} install --quiet --upgrade Pillow requests pandas 2>/dev/null; then
+        success "Python dependencies installed (system pip)"
+
+    # Python 3.12+ / Debian 12+ blocks system-wide pip installs → use venv
+    elif python3 -c "import venv" &>/dev/null; then
+        warn "System pip blocked (externally-managed-environment). Using virtual environment..."
+        VENV_DIR="${HOME}/ollama-venv"
+        python3 -m venv "${VENV_DIR}"
+        "${VENV_DIR}/bin/pip" install --quiet --upgrade Pillow requests pandas
+        success "Python dependencies installed in venv: ${VENV_DIR}"
+
+        # Patch scripts to use the venv Python interpreter
+        SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+        for script in vlm_metadata_export.py test_connection.py; do
+            if [[ -f "${SCRIPT_DIR}/${script}" ]]; then
+                sed -i "1s|.*|#!${VENV_DIR}/bin/python3|" "${SCRIPT_DIR}/${script}"
+                chmod +x "${SCRIPT_DIR}/${script}"
+                info "Patched shebang → ${script}"
+            fi
+        done
+
+        info "Run scripts with: ${VENV_DIR}/bin/python3 vlm_metadata_export.py ..."
+        info "Or activate venv: source ${VENV_DIR}/bin/activate"
+
+    else
+        warn "venv unavailable. Trying --break-system-packages..."
+        if ${PIP_CMD} install --quiet --upgrade --break-system-packages Pillow requests pandas; then
+            success "Python dependencies installed (--break-system-packages)"
+        else
+            warn "Automatic installation failed. Install manually:"
+            warn "  (venv)  python3 -m venv ~/ollama-venv && ~/ollama-venv/bin/pip install Pillow requests pandas"
+            warn "  (apt)   apt install python3-pillow python3-requests python3-pandas"
+            warn "  (force) pip install --break-system-packages Pillow requests pandas"
+        fi
+    fi
 fi
 
 # ─── Verification test ────────────────────────────────────────────────────────
