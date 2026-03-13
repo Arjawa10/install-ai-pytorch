@@ -623,7 +623,7 @@ cat > "${OPENCLAW_CONFIG}" <<OCEOF
   },
   "gateway": {
     "mode": "local",
-    "bind": "0.0.0.0",
+    "bind": "lan",
     "controlUi": {
       "allowedOrigins": [
         "http://${SERVER_IP}:18789",
@@ -666,7 +666,7 @@ else
 fi
 
 # Start gateway with proper binding
-info "Starting gateway with bind 0.0.0.0..."
+info "Starting gateway with bind mode 'lan'..."
 if pgrep -f "openclaw-gateway" > /dev/null 2>&1; then
     info "Stopping existing gateway process..."
     pkill -f "openclaw-gateway" 2>/dev/null || true
@@ -735,9 +735,9 @@ cat <<EOF
   OpenClaw        : $(openclaw --version 2>/dev/null || echo "installed")
   OpenClaw config : ~/.openclaw/openclaw.json
   OpenClaw model  : ollama/${OPENCLAW_MODEL:-${PRIMARY_MODEL}}
-  Gateway bind    : 0.0.0.0:18789 (accessible from outside)
+  Gateway bind    : lan (0.0.0.0:18789)
   Gateway token   : ${OPENCLAW_TOKEN:-<check ~/.openclaw/openclaw.json>}
-  Dashboard       : http://${SERVER_IP:-<your-server-ip>}:18789/
+  Dashboard       : http://localhost:18789/ (via SSH tunnel)
 EOF
 fi
 
@@ -760,7 +760,10 @@ ${BOLD}OpenClaw Commands:${NC}
   Gateway status:       openclaw gateway status
   Open dashboard:       openclaw dashboard
   Start gateway:        openclaw gateway --port 18789
-  SSH tunnel (remote):  ssh -N -L 18789:127.0.0.1:18789 user@your-vps-ip
+  View token:           openclaw config get gateway.auth.token
+  SSH tunnel (OpenSSH): ssh -N -L 18789:127.0.0.1:18789 user@${SERVER_IP:-your-vps-ip}
+  SSH tunnel (PuTTY):   plink -N -L 18789:127.0.0.1:18789 -i your-key.ppk user@${SERVER_IP:-your-vps-ip}
+  Then open:            http://localhost:18789/
 EOF
 fi
 
