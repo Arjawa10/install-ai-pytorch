@@ -602,6 +602,13 @@ if [[ "${INSTALL_VISION}" == "true" && "${INSTALL_PRIMARY}" == "true" ]]; then
     MODELS_ARRAY="{\"id\": \"${PRIMARY_MODEL}\", \"name\": \"${PRIMARY_MODEL}\"}, {\"id\": \"${VISION_MODEL}\", \"name\": \"${VISION_MODEL}\"}"
 fi
 
+# Generate a random auth token for the gateway
+OPENCLAW_TOKEN=$(openssl rand -hex 24 2>/dev/null || head -c 48 /dev/urandom | od -An -tx1 | tr -d ' \n' | head -c 48)
+info "Generated gateway auth token: ${OPENCLAW_TOKEN}"
+
+# Detect server IP for allowedOrigins
+SERVER_IP=$(curl -sf https://ifconfig.me 2>/dev/null || curl -sf https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}' || echo "0.0.0.0")
+
 cat > "${OPENCLAW_CONFIG}" <<OCEOF
 {
   "models": {
@@ -615,7 +622,19 @@ cat > "${OPENCLAW_CONFIG}" <<OCEOF
     }
   },
   "gateway": {
-    "mode": "local"
+    "mode": "local",
+    "bind": "0.0.0.0",
+    "controlUi": {
+      "allowedOrigins": [
+        "http://${SERVER_IP}:18789",
+        "https://${SERVER_IP}:18789",
+        "http://${SERVER_IP}"
+      ]
+    },
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_TOKEN}"
+    }
   },
   "agents": {
     "defaults": {
@@ -628,6 +647,13 @@ OCEOF
 
 success "OpenClaw config created at ${OPENCLAW_CONFIG}"
 info "Primary model for OpenClaw: ollama/${OPENCLAW_MODEL}"
+echo ""
+echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}${CYAN}║  OpenClaw Gateway Token (SAVE THIS!)                     ║${NC}"
+echo -e "${BOLD}${CYAN}╠══════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}${CYAN}║${NC}  ${YELLOW}${OPENCLAW_TOKEN}${NC}  ${BOLD}${CYAN}║${NC}"
+echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
+echo ""
 
 # ─── Onboard & start OpenClaw Gateway ─────────────────────────────────────────
 header "Starting OpenClaw Gateway"
@@ -639,13 +665,29 @@ else
     warn "Onboard command had issues. Trying to start gateway manually..."
 fi
 
-# Check gateway status
-sleep 3
-if openclaw gateway status 2>/dev/null; then
+# Start gateway with proper binding
+info "Starting gateway with bind 0.0.0.0..."
+if pgrep -f "openclaw-gateway" > /dev/null 2>&1; then
+    info "Stopping existing gateway process..."
+    pkill -f "openclaw-gateway" 2>/dev/null || true
+    sleep 2
+fi
+
+nohup openclaw gateway --port 18789 > /var/log/openclaw-gateway.log 2>&1 &
+GATEWAY_PID=$!
+info "Gateway started (PID: ${GATEWAY_PID}, logs: /var/log/openclaw-gateway.log)"
+
+# Wait and verify gateway is running
+sleep 5
+if pgrep -f "openclaw-gateway" > /dev/null 2>&1; then
+    # Check if gateway is binding correctly
+    GATEWAY_BIND=$(ss -tlnp | grep -E "18789|openclaw" | head -1 || echo "unknown")
     success "OpenClaw Gateway is running"
+    info "Gateway binding: ${GATEWAY_BIND}"
 else
     warn "OpenClaw Gateway may not be running. Start manually with:"
     warn "  openclaw gateway --port 18789"
+    warn "Check logs: cat /var/log/openclaw-gateway.log"
 fi
 
 fi  # end OPENCLAW_INSTALLED
@@ -693,7 +735,9 @@ cat <<EOF
   OpenClaw        : $(openclaw --version 2>/dev/null || echo "installed")
   OpenClaw config : ~/.openclaw/openclaw.json
   OpenClaw model  : ollama/${OPENCLAW_MODEL:-${PRIMARY_MODEL}}
-  Dashboard       : http://127.0.0.1:18789/
+  Gateway bind    : 0.0.0.0:18789 (accessible from outside)
+  Gateway token   : ${OPENCLAW_TOKEN:-<check ~/.openclaw/openclaw.json>}
+  Dashboard       : http://${SERVER_IP:-<your-server-ip>}:18789/
 EOF
 fi
 
