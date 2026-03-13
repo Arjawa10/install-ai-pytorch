@@ -597,6 +597,12 @@ if [[ -f "${OPENCLAW_CONFIG}" ]]; then
 fi
 
 mkdir -p "${OPENCLAW_CONFIG_DIR}"
+# Build models array based on what was installed
+MODELS_ARRAY="\"${OPENCLAW_MODEL}\""
+if [[ "${INSTALL_VISION}" == "true" && "${INSTALL_PRIMARY}" == "true" ]]; then
+    MODELS_ARRAY="\"${PRIMARY_MODEL}\", \"${VISION_MODEL}\""
+fi
+
 cat > "${OPENCLAW_CONFIG}" <<OCEOF
 {
   "models": {
@@ -604,7 +610,8 @@ cat > "${OPENCLAW_CONFIG}" <<OCEOF
       "ollama": {
         "baseUrl": "http://localhost:11434",
         "apiKey": "ollama-local",
-        "api": "ollama"
+        "api": "ollama",
+        "models": [${MODELS_ARRAY}]
       }
     }
   },
