@@ -340,32 +340,49 @@ if [[ -n "${PIP_CMD}" ]]; then
 
     if ${PIP_CMD} install --quiet --upgrade Pillow requests pandas 2>/dev/null; then
         success "Python dependencies installed (system pip)"
-    elif python3 -c "import venv" &>/dev/null; then
-        warn "System pip blocked (externally-managed-environment). Using virtual environment..."
-        VENV_DIR="${HOME}/ollama-venv"
-        python3 -m venv "${VENV_DIR}"
-        "${VENV_DIR}/bin/pip" install --quiet --upgrade Pillow requests pandas
-        success "Python dependencies installed in venv: ${VENV_DIR}"
-
-        SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-        for script in vlm_metadata_export.py test_connection.py; do
-            if [[ -f "${SCRIPT_DIR}/${script}" ]]; then
-                sed -i "1s|.*|#!${VENV_DIR}/bin/python3|" "${SCRIPT_DIR}/${script}"
-                chmod +x "${SCRIPT_DIR}/${script}"
-                info "Patched shebang → ${script}"
-            fi
-        done
-        info "Run scripts with: ${VENV_DIR}/bin/python3 vlm_metadata_export.py ..."
-        info "Or activate venv: source ${VENV_DIR}/bin/activate"
     else
-        warn "venv unavailable. Trying --break-system-packages..."
-        if ${PIP_CMD} install --quiet --upgrade --break-system-packages Pillow requests pandas; then
-            success "Python dependencies installed (--break-system-packages)"
+        warn "System pip blocked (externally-managed-environment). Using virtual environment..."
+
+        # Auto-install python3-venv if not available
+        if ! python3 -c "import venv" &>/dev/null; then
+            PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3")
+            info "python3-venv not found. Installing python${PY_VER}-venv..."
+            if command -v apt-get &>/dev/null; then
+                $SUDO apt-get update -qq
+                $SUDO apt-get install -y -qq "python${PY_VER}-venv" || $SUDO apt-get install -y -qq python3-venv
+                success "python3-venv installed"
+            else
+                warn "Cannot auto-install python3-venv (apt-get not found)."
+                warn "Install manually: sudo apt install python3-venv"
+            fi
+        fi
+
+        if python3 -c "import venv" &>/dev/null; then
+            VENV_DIR="${HOME}/ollama-venv"
+            python3 -m venv "${VENV_DIR}"
+            "${VENV_DIR}/bin/pip" install --quiet --upgrade Pillow requests pandas
+            success "Python dependencies installed in venv: ${VENV_DIR}"
+
+            SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+            for script in vlm_metadata_export.py test_connection.py; do
+                if [[ -f "${SCRIPT_DIR}/${script}" ]]; then
+                    sed -i "1s|.*|#!${VENV_DIR}/bin/python3|" "${SCRIPT_DIR}/${script}"
+                    chmod +x "${SCRIPT_DIR}/${script}"
+                    info "Patched shebang → ${script}"
+                fi
+            done
+            info "Run scripts with: ${VENV_DIR}/bin/python3 vlm_metadata_export.py ..."
+            info "Or activate venv: source ${VENV_DIR}/bin/activate"
         else
-            warn "Automatic installation failed. Install manually:"
-            warn "  (venv)  python3 -m venv ~/ollama-venv && ~/ollama-venv/bin/pip install Pillow requests pandas"
-            warn "  (apt)   apt install python3-pillow python3-requests python3-pandas"
-            warn "  (force) pip install --break-system-packages Pillow requests pandas"
+            warn "venv still unavailable after install attempt. Trying --break-system-packages..."
+            if ${PIP_CMD} install --quiet --upgrade --break-system-packages Pillow requests pandas; then
+                success "Python dependencies installed (--break-system-packages)"
+            else
+                warn "Automatic installation failed. Install manually:"
+                warn "  (venv)  sudo apt install python3-venv && python3 -m venv ~/ollama-venv && ~/ollama-venv/bin/pip install Pillow requests pandas"
+                warn "  (apt)   apt install python3-pillow python3-requests python3-pandas"
+                warn "  (force) pip install --break-system-packages Pillow requests pandas"
+            fi
         fi
     fi
 fi
