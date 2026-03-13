@@ -597,9 +597,9 @@ if [[ -f "${OPENCLAW_CONFIG}" ]]; then
 fi
 
 # Build models array based on what was installed
-MODELS_ARRAY="{\"id\": \"${OPENCLAW_MODEL}\"}"
+MODELS_ARRAY="{\"id\": \"${OPENCLAW_MODEL}\", \"name\": \"${OPENCLAW_MODEL}\"}"
 if [[ "${INSTALL_VISION}" == "true" && "${INSTALL_PRIMARY}" == "true" ]]; then
-    MODELS_ARRAY="{\"id\": \"${PRIMARY_MODEL}\"}, {\"id\": \"${VISION_MODEL}\"}"
+    MODELS_ARRAY="{\"id\": \"${PRIMARY_MODEL}\", \"name\": \"${PRIMARY_MODEL}\"}, {\"id\": \"${VISION_MODEL}\", \"name\": \"${VISION_MODEL}\"}"
 fi
 
 cat > "${OPENCLAW_CONFIG}" <<OCEOF
