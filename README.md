@@ -1,6 +1,6 @@
 # install-ai-pytorch
 
-Automated VPS AI setup for **Ollama + Vision LLM** (`llama3.2-vision`) on AMD GPU (ROCm) or NVIDIA GPU (CUDA).
+Automated VPS AI setup for **Ollama + Vision LLM + OpenClaw** on AMD GPU (ROCm) or NVIDIA GPU (CUDA).
 
 ---
 
@@ -9,9 +9,21 @@ Automated VPS AI setup for **Ollama + Vision LLM** (`llama3.2-vision`) on AMD GP
 - Installs and configures [Ollama](https://ollama.com/) on a fresh VPS
 - Configures Ollama to be accessible from Docker containers / JupyterLab
 - Sets up firewall rules so Docker containers can reach Ollama
-- Pulls the default vision model (`llama3.2-vision:11b`)
+- Pulls AI models (vision + chat/coding/agent)
+- Optionally installs [OpenClaw](https://openclaw.ai/) AI assistant with local Ollama integration
 - Provides a Python script to bulk-export image metadata to CSV using a vision LLM
 - Provides a connectivity test script useful from JupyterLab or Docker
+
+---
+
+## Models
+
+| Model | Size | Purpose |
+|---|---|---|
+| `qwen2.5vl:72b` | ~47 GB | Vision processing (JupyterLab, metadata export) |
+| `qwen3.5:122b` | ~81 GB | Chat, coding, automation, agents (OpenClaw) |
+
+All models are **free and open-source**.
 
 ---
 
@@ -21,8 +33,8 @@ Automated VPS AI setup for **Ollama + Vision LLM** (`llama3.2-vision`) on AMD GP
 |---|---|
 | OS | Ubuntu 20.04+ / Debian 11+ |
 | GPU | AMD MI-series with ROCm **or** NVIDIA GPU with CUDA |
-| RAM / VRAM | ≥ 16 GB VRAM for 11B model, ≥ 144 GB for 72B model |
-| Internet | Required to download Ollama and model weights |
+| RAM / VRAM | ≥ 48 GB VRAM for vision model, ≥ 128 GB for both models |
+| Internet | Required to download Ollama, models, and OpenClaw |
 | Python | Python 3.8+ with `pip` |
 
 > **Tested on:** AMD MI300X (192 GB VRAM) with ROCm 7.0
@@ -32,67 +44,46 @@ Automated VPS AI setup for **Ollama + Vision LLM** (`llama3.2-vision`) on AMD GP
 ## Quick Start
 
 ```bash
-git clone https://github.com/georgepre13/install-ai-pytorch.git
+git clone https://github.com/Arjawa10/install-ai-pytorch.git
 cd install-ai-pytorch
 bash setup.sh
 ```
 
-That's it. The script is **idempotent** — safe to run multiple times.
+The script will prompt you to choose:
 
-For automated/CI environments (no interactive prompts):
+1. **Setup Mode** — Ollama only / OpenClaw only / Full setup
+2. **Model Selection** — Vision model / Primary model / Both
+
+### Non-interactive modes
 
 ```bash
+# Ollama + default vision model only
 bash setup.sh --non-interactive
+
+# Full setup: Ollama + all models + OpenClaw
+bash setup.sh --with-openclaw
 ```
 
 ---
 
-## Manual Step-by-Step
+## Setup Modes
 
-If you prefer to run steps manually:
+### Mode 1: Ollama + Vision LLM
 
-### 1. Install Ollama
+Installs Ollama, configures for Docker access, and pulls the selected model(s).
 
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
+### Mode 2: OpenClaw Only
 
-### 2. Configure Ollama to listen on all interfaces
+Installs OpenClaw and configures it to use an **already running** Ollama instance.
 
-By default Ollama binds to `127.0.0.1:11434`, which is not reachable from Docker containers.
+### Mode 3: Full Setup
 
-```bash
-# Create a systemd drop-in override
-sudo mkdir -p /etc/systemd/system/ollama.service.d
-sudo tee /etc/systemd/system/ollama.service.d/ollama-host.conf <<'EOF'
-[Service]
-Environment="OLLAMA_HOST=0.0.0.0:11434"
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl restart ollama
-
-# Verify — should show *:11434 or 0.0.0.0:11434
-ss -tlnp | grep 11434
-```
-
-### 3. Allow Docker network access via iptables
-
-```bash
-sudo iptables -I INPUT -p tcp --dport 11434 -s 172.17.0.0/16 -j ACCEPT
-```
-
-### 4. Pull the vision model
-
-```bash
-ollama pull llama3.2-vision:11b
-```
-
-### 5. Install Python dependencies
-
-```bash
-pip install Pillow requests pandas
-```
+Installs everything:
+- Ollama + systemd service + iptables
+- Both AI models (`qwen2.5vl:72b` + `qwen3.5:122b`)
+- Node.js 22+
+- OpenClaw with Ollama integration
+- Python dependencies
 
 ---
 
@@ -101,14 +92,14 @@ pip install Pillow requests pandas
 ### Metadata export script
 
 ```bash
-# Basic usage (edit defaults at top of script)
+# Basic usage
 python3 vlm_metadata_export.py
 
 # With CLI arguments
 python3 vlm_metadata_export.py \
     --folder /path/to/images \
     --output results.csv \
-    --model llama3.2-vision:11b \
+    --model qwen2.5vl:72b \
     --ollama-url http://localhost:11434
 ```
 
@@ -141,6 +132,20 @@ curl http://localhost:11434/api/tags
 curl http://172.17.0.1:11434/api/tags
 ```
 
+### OpenClaw
+
+```bash
+# Check gateway status
+openclaw gateway status
+
+# Open dashboard
+openclaw dashboard
+
+# Access from remote machine (SSH tunnel)
+ssh -N -L 18789:127.0.0.1:18789 user@your-vps
+# Then open http://127.0.0.1:18789/ in your browser
+```
+
 ---
 
 ## Example CSV Output
@@ -160,9 +165,32 @@ curl http://172.17.0.1:11434/api/tags
 | `FOLDER_PATH` | `./images` | Folder containing images |
 | `OUTPUT_CSV` | `metadata_vlm.csv` | Output CSV file |
 | `OLLAMA_URL` | *(auto-detect)* | Ollama base URL |
-| `MODEL_NAME` | `llama3.2-vision:11b` | Vision model to use |
+| `MODEL_NAME` | `qwen2.5vl:72b` | Vision model to use |
 
 All options can also be set via CLI flags — run `python3 vlm_metadata_export.py --help`.
+
+### OpenClaw config
+
+Located at `~/.openclaw/openclaw.json`. Auto-generated by setup script:
+
+```json
+{
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://localhost:11434",
+        "apiKey": "ollama-local",
+        "api": "ollama"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": { "primary": "ollama/qwen3.5:122b" }
+    }
+  }
+}
+```
 
 ---
 
@@ -206,8 +234,9 @@ sudo systemctl restart ollama  # Restart
 ### Model not found
 
 ```bash
-ollama list                        # List downloaded models
-ollama pull llama3.2-vision:11b    # Download the model
+ollama list                    # List downloaded models
+ollama pull qwen2.5vl:72b     # Download vision model
+ollama pull qwen3.5:122b      # Download primary model
 ```
 
 ### GPU not detected
@@ -232,17 +261,12 @@ journalctl -u ollama -n 50 --no-pager    # View recent logs
 sudo systemctl status ollama              # Check service status
 ```
 
----
-
-## Upgrading to a Larger Model
-
-The AMD MI300X with 192 GB VRAM can handle 72B parameter models:
+### OpenClaw issues
 
 ```bash
-ollama pull qwen2.5vl:72b
-
-# Then use it in the export script:
-python3 vlm_metadata_export.py --model qwen2.5vl:72b
+openclaw gateway status                   # Check gateway
+openclaw gateway --port 18789             # Start manually
+cat ~/.openclaw/openclaw.json             # Check config
 ```
 
 ---
@@ -251,7 +275,7 @@ python3 vlm_metadata_export.py --model qwen2.5vl:72b
 
 | File | Description |
 |---|---|
-| `setup.sh` | Automated setup script |
+| `setup.sh` | Automated setup script (Ollama + OpenClaw) |
 | `vlm_metadata_export.py` | Bulk image metadata export to CSV |
 | `test_connection.py` | Ollama connectivity test |
 | `README.md` | This documentation |

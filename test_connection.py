@@ -31,7 +31,7 @@ CANDIDATE_HOSTS = [
     "http://host.docker.internal:11434",
 ]
 
-DEFAULT_VISION_MODEL = "llama3.2-vision:11b"
+DEFAULT_VISION_MODEL = "qwen2.5vl:72b"
 
 
 def _png_chunk(tag: bytes, data: bytes) -> bytes:

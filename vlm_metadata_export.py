@@ -35,7 +35,7 @@ import requests
 FOLDER_PATH = "./images"           # Folder containing images to process
 OUTPUT_CSV  = "metadata_vlm.csv"  # Output CSV file path
 OLLAMA_URL  = ""                   # Leave empty for auto-detection
-MODEL_NAME  = "llama3.2-vision:11b"
+MODEL_NAME  = "qwen2.5vl:72b"
 
 # Candidate Ollama hosts (tried in order during auto-detection)
 OLLAMA_HOST_CANDIDATES = [
