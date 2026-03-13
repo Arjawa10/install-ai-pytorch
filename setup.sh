@@ -596,11 +596,10 @@ if [[ -f "${OPENCLAW_CONFIG}" ]]; then
     cp "${OPENCLAW_CONFIG}" "${OPENCLAW_CONFIG}.bak.$(date +%s)"
 fi
 
-mkdir -p "${OPENCLAW_CONFIG_DIR}"
 # Build models array based on what was installed
-MODELS_ARRAY="\"${OPENCLAW_MODEL}\""
+MODELS_ARRAY="{\"id\": \"${OPENCLAW_MODEL}\"}"
 if [[ "${INSTALL_VISION}" == "true" && "${INSTALL_PRIMARY}" == "true" ]]; then
-    MODELS_ARRAY="\"${PRIMARY_MODEL}\", \"${VISION_MODEL}\""
+    MODELS_ARRAY="{\"id\": \"${PRIMARY_MODEL}\"}, {\"id\": \"${VISION_MODEL}\"}"
 fi
 
 cat > "${OPENCLAW_CONFIG}" <<OCEOF
@@ -615,9 +614,13 @@ cat > "${OPENCLAW_CONFIG}" <<OCEOF
       }
     }
   },
+  "gateway": {
+    "mode": "local"
+  },
   "agents": {
     "defaults": {
-      "model": { "primary": "ollama/${OPENCLAW_MODEL}" }
+      "model": { "primary": "ollama/${OPENCLAW_MODEL}" },
+      "memorySearch": { "enabled": false }
     }
   }
 }
